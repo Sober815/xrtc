@@ -36,6 +36,14 @@ public:
     RtpPacketCounter retransmitted;
 };
 
+enum class RtpPacketMediaType : size_t {
+    kAudio,
+    kVideo,
+    kRetransmission,
+    kForwardErrorCorrection,
+    kPadding,
+};
+
 } // namespace xrtc
 
 #endif // XRTCSDK_XRTC_RTC_MODULES_RTP_RTCP_RTP_RTCP_DEFINES_H_

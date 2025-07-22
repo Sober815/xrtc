@@ -17,7 +17,7 @@ void XRTCEngine::Init(XRTCEngineObserver* observer) {
     rtc::LogMessage::LogToDebug(rtc::LS_VERBOSE);
 
     XRTCGlobal::Instance()->RegisterEngineObserver(observer);
-
+   
     RTC_LOG(LS_INFO) << "XRTCSDK init";
 }
 

@@ -35,7 +35,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
 	)
 endif()
 
-add_library(xrtc SHARED ${all_src})
+add_library(xrtc SHARED ${all_src} "rtc/pc/rtp_transport_controller_send.cpp" "rtc/pc/rtp_transport_controller_send.h" "rtc/modules/pacing/round_robin_packet_queue.h" "rtc/modules/pacing/round_robin_packet_queue.cpp")
 target_link_libraries(xrtc
     absl_bad_optional_access
     absl_throw_delegate

@@ -10,6 +10,7 @@
 #include "xrtc/rtc/modules/rtp_rtcp/rtp_packet_to_send.h"
 #include "xrtc/rtc/modules/rtp_rtcp/rtp_format_h264.h"
 #include "xrtc/base/xrtc_global.h"
+#include "xrtc/rtc/pc/rtp_transport_controller_send.h"
 
 namespace xrtc {
 

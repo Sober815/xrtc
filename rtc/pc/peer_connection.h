@@ -14,6 +14,7 @@
 #include "xrtc/rtc/modules/rtp_rtcp/rtp_rtcp_interface.h"
 
 namespace xrtc {
+    class RtpTransportControllerSend;
 
 struct RTCOfferAnswerOptions {
     bool send_audio = true;
@@ -74,6 +75,8 @@ private:
     webrtc::Clock* clock_;
     VideoSendStream* video_send_stream_ = nullptr;
     std::vector<std::shared_ptr<RtpPacketToSend>> video_cache_;
+    
+    std::unique_ptr<RtpTransportControllerSend> transport_send_;
 };
 
 } // namespace xrtc

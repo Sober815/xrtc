@@ -11,6 +11,7 @@ public:
     RtpPacket(size_t capacity);
 
     uint16_t sequence_number() const { return sequence_number_; }
+    uint32_t ssrc() const { return ssrc_; }
     bool marker() const { return marker_; }
     uint32_t timestamp() const { return timestamp_; }
     rtc::ArrayView<const uint8_t> payload() const {
