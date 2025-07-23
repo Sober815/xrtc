@@ -5,16 +5,18 @@
 #include <memory>
 
 #include <system_wrappers/include/clock.h>
+#include <api/task_queue/task_queue_factory.h>
 
 #include "xrtc/media/base/media_frame.h"
 #include "xrtc/rtc/pc/session_description.h"
 #include "xrtc/rtc/pc/transport_controller.h"
 #include "xrtc/rtc/pc/peer_connection_def.h"
+#include "xrtc/rtc/pc/rtp_transport_controller_send.h"
+//#include "xrtc/rtc/audio/audio_send_stream.h"
 #include "xrtc/rtc/video/video_send_stream.h"
 #include "xrtc/rtc/modules/rtp_rtcp/rtp_rtcp_interface.h"
 
 namespace xrtc {
-    class RtpTransportControllerSend;
 
 struct RTCOfferAnswerOptions {
     bool send_audio = true;
@@ -35,6 +37,7 @@ public:
     int SetRemoteSDP(const std::string& sdp);
     std::string CreateAnswer(const RTCOfferAnswerOptions& options,
         const std::string& stream_id);
+    bool SendEncodedAudio(std::shared_ptr<MediaFrame> frame);
     bool SendEncodedImage(std::shared_ptr<MediaFrame> frame);
 
     // RtpRtcpModuleObserver
@@ -53,6 +56,7 @@ private:
     void OnIceState(TransportController*, ice::IceTransportState ice_state);
     void OnRtcpPacketReceived(TransportController*, const char* data,
         size_t len, int64_t);
+    void CreateAudioSendStream(AudioContentDescription* audio_content);
     void CreateVideoSendStream(VideoContentDescription* video_content);
     void AddVideoCache(std::shared_ptr<RtpPacketToSend> packet);
     std::shared_ptr<RtpPacketToSend> FindVideoCache(uint16_t seq);
@@ -65,17 +69,20 @@ private:
     uint32_t local_audio_ssrc_ = 0;
     uint32_t local_video_ssrc_ = 0;
     uint32_t local_video_rtx_ssrc_ = 0;
+    uint32_t audio_pt_ = 0;
     uint8_t video_pt_ = 0;
     uint8_t video_rtx_pt_ = 0;
 
     // 按照规范该值的初始值需要随机
+    uint16_t audio_seq_ = 1000;
     uint16_t video_seq_ = 1000;
     
     PeerConnectionState pc_state_ = PeerConnectionState::kNew;
     webrtc::Clock* clock_;
+    //AudioSendStream* audio_send_stream_ = nullptr;
     VideoSendStream* video_send_stream_ = nullptr;
     std::vector<std::shared_ptr<RtpPacketToSend>> video_cache_;
-    
+    std::unique_ptr<webrtc::TaskQueueFactory> task_queue_factory_;
     std::unique_ptr<RtpTransportControllerSend> transport_send_;
 };
 

@@ -1,96 +1,61 @@
-#include "task_queue_paced_sender.h"
-#include "task_queue_paced_sender.h"
 #include "xrtc/rtc/modules/pacing/task_queue_paced_sender.h"
 
 namespace xrtc {
 
-    TaskQueuePacedSender::TaskQueuePacedSender(webrtc::Clock* clock,
-        webrtc::TaskQueueFactory* task_queue_factory
-        )
-        : clock_(clock)
-        , task_queue_(task_queue_factory->CreateTaskQueue(
-            "TaskQueuePacedSender",
-            webrtc::TaskQueue::Priority::NORMAL))
+TaskQueuePacedSender::TaskQueuePacedSender(webrtc::Clock* clock, 
+    webrtc::TaskQueueFactory* task_queue_factory,
+    webrtc::TimeDelta hold_back_window) :
+    clock_(clock),
+    task_queue_(task_queue_factory->CreateTaskQueue("TaskQueuePacedSender",
+        webrtc::TaskQueueFactory::Priority::NORMAL)),
+    pacing_controller_(clock_),
+    hold_back_window_(hold_back_window)
+{
+}
 
-        {
+TaskQueuePacedSender::~TaskQueuePacedSender() {
+}
 
-        }
+void TaskQueuePacedSender::EnsureStarted() {
+    task_queue_.PostTask([this]() {
+        MaybeProcessPackets(webrtc::Timestamp::MinusInfinity());
+    });
+}
 
+void TaskQueuePacedSender::EnqueuePacket(std::unique_ptr<RtpPacketToSend> packet) {
+    task_queue_.PostTask([this, packet_ = std::move(packet)]() mutable {
+        pacing_controller_.EnqueuePacket(std::move(packet_));
+    });
+}
 
-        TaskQueuePacedSender::~TaskQueuePacedSender()
-        {
+void TaskQueuePacedSender::MaybeProcessPackets(
+    webrtc::Timestamp scheduled_process_time) 
+{
+    webrtc::Timestamp next_process_time = pacing_controller_.NextSendTime();
+    bool is_sheculded_call = (scheduled_process_time == next_process_time_);
+    if (is_sheculded_call) {
+        // å½“å‰çš„ä»»åŠ¡å°†è¢«æ‰§è¡Œï¼Œéœ€è¦é‡æ–°è®¾å®šä¸‹ä¸€æ¬¡ä»»åŠ¡æ‰§è¡Œçš„æ—¶é—´
+        next_process_time_ = webrtc::Timestamp::MinusInfinity();
+        // æ‰§è¡Œæ•°æ®åŒ…å‘é€é€»è¾‘
+        pacing_controller_.ProcessPackets();
+        next_process_time = pacing_controller_.NextSendTime();
+    }
 
-        }
+    webrtc::Timestamp now = clock_->CurrentTime();
+    // éœ€è¦è¿‡å¤šé•¿æ—¶é—´ä¹‹åï¼Œå†æ¬¡è¿›è¡Œè¿™ä¸ªè°ƒåº¦
+    absl::optional<webrtc::TimeDelta> time_to_next_send;
+    if (next_process_time_.IsMinusInfinity()) {
+        // å½“å‰è¿˜æ²¡æœ‰è®¾å®šä¸‹ä¸€æ¬¡çš„è°ƒåº¦ä»»åŠ¡ï¼Œéœ€è¦åˆ›å»ºä¸€ä¸ª
+        time_to_next_send = std::max(next_process_time - now, hold_back_window_);
+    }
 
-     
-   
+    if (time_to_next_send) {
+        next_process_time_ = next_process_time;
 
-        /*
-        µ÷ÓÃÏß³Ì                    ÈÎÎñ¶ÓÁĞÏß³Ì
-            |                           |
-        EnqueuePacket() ©¤©¤©¤©¤PostTask©¤©¤©¤¡ú lambda Ö´ĞĞ
-            |                           |
-        ·µ»Ø (²»×èÈû)                    ©À¡ú pacing_controller_.EnqueuePacket()
-                                        |
-                                        ©¸¡ú Êı¾İ°ü±»´¦Àí
-        
-        */
-        // webrtc::Timestamp::MinusInfinity()Ö¸Ê¾´Ëµ÷ÓÃÉĞÎ´±»pacing_controllerµ÷¶È
-        void TaskQueuePacedSender::EnsureStarted()
-        {
-            task_queue_.PostTask([this]() {
-                MaybeProcessPackets(webrtc::Timestamp::MinusInfinity());
-                });
-        }
+        task_queue_.PostDelayedTask([this, next_process_time]() {
+            MaybeProcessPackets(next_process_time);
+        }, time_to_next_send->ms<uint32_t>());
+    }
+}
 
-        void TaskQueuePacedSender::EnqueuePacket(std::unique_ptr<RtpPacketToSend> packet)
-        {
-            //½« packet µÄËùÓĞÈ¨×ªÒÆ¸ø lambda ÄÚµÄ packet_
-            task_queue_.PostTask([this, packet_ = std::move(packet)]() {
-                pacing_controller_.EnqueuePacket(std::move(packet_));
-            });
-        }
-        // ¼ì²éÊÇ²»ÊÇ´ïµ½·¢ËÍÊı¾İ°üµÄÊ±¼ä£¬Èç¹û²»ÊÇ£¬Ôòµ÷¶ÈÒ»¸öÑÓ³ÙÈÎÎñ
-        void TaskQueuePacedSender::MaybeProcessPackets(webrtc::Timestamp scheduled_process_time)
-        {
-            webrtc::Timestamp next_process_time = pacing_controller_.NextSendTime();
-            // Èç¹û´«ÈëµÄÊ±¼äµÈÓÚ¼Æ»®Òªµ÷¶ÈµÄÊ±¼ä£¬Á¢¼´µ÷¶ÈÈÎÎñ
-            bool is_scheduled_call = (next_process_time_ == scheduled_process_time);
-            if (is_scheduled_call) {
-                // ÉÏÒ»¸ö¼Æ»®×¼±¸Ö´ĞĞ£¬ÏÂÒ»¸ö¼Æ»®´ı´´½¨
-                next_process_time_ = webrtc::Timestamp::MinusInfinity();
-                pacing_controller_.ProcessPackets();
-                next_process_time = pacing_controller_.NextSendTime();
-            }
-            webrtc::Timestamp now = clock_->CurrentTime();
-
-            absl::optional<webrtc::TimeDelta> time_to_next_process;
-            // ÒÑ¾­Ã»ÓĞÏÂÒ»¸öÈÎÎñ£¬ĞèÒª´´½¨Ò»¸öĞÂÈÎÎñ
-            if (next_process_time_.IsMinusInfinity()) {
-                time_to_next_process = std::max(next_process_time - now,
-                    hold_back_window_);
-            }
-            if (time_to_next_process) {
-                next_process_time_ = next_process_time;
-                task_queue_.PostDelayedTask([this, next_process_time]() {
-                    MaybeProcessPackets(next_process_time);
-                    }, time_to_next_process->ms<uint32_t>());
-            }
-            
-        }
-
-     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+} // namespace xrtc

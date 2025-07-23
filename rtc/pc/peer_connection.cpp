@@ -5,12 +5,12 @@
 #include <rtc_base/logging.h>
 #include <rtc_base/string_encode.h>
 #include <rtc_base/helpers.h>
+#include <api/task_queue/default_task_queue_factory.h>
 #include <ice/candidate.h>
 
 #include "xrtc/rtc/modules/rtp_rtcp/rtp_packet_to_send.h"
 #include "xrtc/rtc/modules/rtp_rtcp/rtp_format_h264.h"
 #include "xrtc/base/xrtc_global.h"
-#include "xrtc/rtc/pc/rtp_transport_controller_send.h"
 
 namespace xrtc {
 
@@ -19,7 +19,10 @@ const size_t RTC_PACKET_CACHE_SIZE = 2048;
 PeerConnection::PeerConnection() :
     transport_controller_(std::make_unique<TransportController>()),
     clock_(webrtc::Clock::GetRealTimeClock()),
-    video_cache_(RTC_PACKET_CACHE_SIZE)
+    video_cache_(RTC_PACKET_CACHE_SIZE),
+    task_queue_factory_(webrtc::CreateDefaultTaskQueueFactory()),
+    transport_send_(std::make_unique<RtpTransportControllerSend>(clock_,
+        task_queue_factory_.get()))
 {
     transport_controller_->SignalIceState.connect(this,
         &PeerConnection::OnIceState);
@@ -29,6 +32,11 @@ PeerConnection::PeerConnection() :
 
 PeerConnection::~PeerConnection() {
     XRTCGlobal::Instance()->network_thread()->Invoke<void>(RTC_FROM_HERE, [=]() {
+       /* if (audio_send_stream_) {
+            delete audio_send_stream_;
+            audio_send_stream_ = nullptr;
+        }*/
+
         if (video_send_stream_) {
             delete video_send_stream_;
             video_send_stream_ = nullptr;
@@ -184,6 +192,13 @@ int PeerConnection::SetRemoteSDP(const std::string& sdp) {
     remote_desc_->AddTransportInfo(audio_td);
     remote_desc_->AddTransportInfo(video_td);
 
+    if (audio_content) {
+        auto audio_codecs = audio_content->codecs();
+        if (!audio_codecs.empty()) {
+            audio_pt_ = audio_codecs[0]->id;
+        }
+    }
+
     if (video_content) {
         auto video_codecs = video_content->codecs();
         if (!video_codecs.empty()) {
@@ -237,6 +252,8 @@ std::string PeerConnection::CreateAnswer(const RTCOfferAnswerOptions& options,
             local_audio_ssrc_ = rtc::CreateRandomId();
             audio_stream.ssrcs.push_back(local_audio_ssrc_);
             audio_content->AddStream(audio_stream);
+
+            CreateAudioSendStream(audio_content.get());
         }
     }
 
@@ -297,6 +314,37 @@ std::string PeerConnection::CreateAnswer(const RTCOfferAnswerOptions& options,
     return local_desc_->ToString();
 }
 
+bool PeerConnection::SendEncodedAudio(std::shared_ptr<MediaFrame> frame) {
+    if (pc_state_ != PeerConnectionState::kConnected) {
+        return true;
+    }
+
+    // 音频数据打包成rtp的格式
+    auto packet = std::make_shared<RtpPacketToSend>();
+    packet->SetPayloadType(audio_pt_);
+    packet->SetSequenceNumber(audio_seq_++);
+    packet->SetSsrc(local_audio_ssrc_);
+    packet->SetTimestamp(frame->ts);
+
+    // 设置负载数据
+    size_t payload_size = frame->data_len[0];
+    uint8_t* payload = packet->AllocatePayload(payload_size);
+    memcpy(payload, frame->data[0], payload_size);
+
+  /*  if (audio_send_stream_) {
+        audio_send_stream_->OnSendingRtpFrame(frame->ts,
+            frame->capture_time_ms);
+        audio_send_stream_->UpdateRtpStats(packet, false);
+    }*/
+
+    // 发送数据包
+    // TODO, transport_name此处写死，后面可以换成变量
+    transport_controller_->SendPacket("audio", (const char*)packet->data(),
+        packet->size());
+
+    return true;
+}
+
 bool PeerConnection::SendEncodedImage(std::shared_ptr<MediaFrame> frame) {
     if (pc_state_ != PeerConnectionState::kConnected) {
         return true;
@@ -327,6 +375,7 @@ bool PeerConnection::SendEncodedImage(std::shared_ptr<MediaFrame> frame) {
         }
 
         single_packet->SetSequenceNumber(video_seq_++);
+        single_packet->set_packet_type(RtpPacketMediaType::kVideo);
 
         if (video_send_stream_) {
             video_send_stream_->UpdateRtpStats(single_packet, false, false);
@@ -335,8 +384,11 @@ bool PeerConnection::SendEncodedImage(std::shared_ptr<MediaFrame> frame) {
         AddVideoCache(single_packet);
         // 发送数据包
         // TODO, transport_name此处写死，后面可以换成变量
-        transport_controller_->SendPacket("audio", (const char*)single_packet->data(),
-            single_packet->size());
+        /*transport_controller_->SendPacket("audio", (const char*)single_packet->data(),
+            single_packet->size());*/
+        std::unique_ptr<RtpPacketToSend> packet = 
+            std::make_unique<RtpPacketToSend>(*single_packet);
+        transport_send_->EnqueuePacket(std::move(packet));
     }
 
     return true;
@@ -350,7 +402,7 @@ void PeerConnection::OnLocalRtcpPacket(webrtc::MediaType media_type,
     if (pc_state_ != PeerConnectionState::kConnected) {
         return;
     }
-
+    
     transport_controller_->SendPacket("audio", (const char*)data, len);
 }
 
@@ -420,6 +472,30 @@ void PeerConnection::OnRtcpPacketReceived(TransportController*,
     if (video_send_stream_) {
         video_send_stream_->DeliverRtcp((const uint8_t*)data, len);
     }
+}
+
+void PeerConnection::CreateAudioSendStream(AudioContentDescription* audio_content) {
+    if (!audio_content) {
+        return;
+    }
+
+    //// 暂时只考虑推送一路音频
+    //for (auto stream : audio_content->streams()) {
+    //    if (!stream.ssrcs.empty()) {
+    //        AudioSendStreamConfig config;
+    //        config.rtp.ssrc = stream.ssrcs[0];
+    //        config.rtp.payload_type = video_pt_;
+    //        config.rtp_rtcp_module_observer = this;
+
+    //        // 用网络线程创建
+    //        XRTCGlobal::Instance()->network_thread()->Invoke<void>(RTC_FROM_HERE,
+    //            [=]() {
+    //                audio_send_stream_ = new AudioSendStream(clock_, config);
+    //            });
+    //    }
+
+    //    break;
+    //}
 }
 
 void PeerConnection::CreateVideoSendStream(VideoContentDescription* video_content) {

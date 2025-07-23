@@ -1,68 +1,70 @@
-#include "round_robin_packet_queue.h"
-
+ï»¿#include "xrtc/rtc/modules/pacing/round_robin_packet_queue.h"
 
 namespace xrtc {
-	RoundRobinPacketQueue::RoundRobinPacketQueue()
-	{
-	}
-	RoundRobinPacketQueue::~RoundRobinPacketQueue()
-	{
-	}
-	void RoundRobinPacketQueue::Push(int priority, 
-		webrtc::Timestamp enqueue_time, 
-		uint64_t enquue_order, 
-		std::unique_ptr<RtpPacketToSend> packet)
-	{
-		Push(QueuedPacket(priority, enqueue_time, enquue_order, std::move(packet)));
-	}
-	void RoundRobinPacketQueue::Push(const QueuedPacket& packet)
-	{
-		//²éÕÒpacketÊÇ·ñ´æÔÚ¶ÔÓ¦µÄstream
-		auto stream_iter = streams_.find(packet.Ssrc());
-		if (stream_iter == streams_.end())//Ã»ÕÒµ½£¬streamµÚÒ»¸ö°ü
-		{
-			stream_iter = streams_.emplace(packet.Ssrc(), Stream()).first;
-			// ÐÂµÄÊý¾ÝÉÐÎ´ÁÐÈëÓÅÏÈ¼¶ÅÅÐò
-			stream_iter->second.priority_it_ = stream_priorities_.end();
-			stream_iter->second.ssrc = packet.Ssrc();
-		}
 
-		Stream* stream = &stream_iter->second;
-		//µ÷ÕûÁ÷µÄÓÅÏÈ¼¶
-		if (stream->priority_it_ == stream_priorities_.end())
-		{
-			//ÔÚmapµ±ÖÐ»¹Ã»ÓÐ½øÐÐ¸ÃÁ÷µÄÓÅÏÈ¼¶ÅÅÐò
-				stream_priorities_.emplace(StreamPrioKey(packet.Priority(), stream->size),
-					packet.Ssrc());
-		}
-		else if (packet.Priority() < stream->priority_it_->first.priority) {
-			stream_priorities_.erase(stream->priority_it_);
-			// ÖØÐÂ²åÈë£¬¸üÐÂÓÅÏÈ¼¶
-			stream_priorities_.emplace(StreamPrioKey(packet.Priority(), stream->size),
-				packet.Ssrc());
-		}
-
-		stream->packet_queue.emplace(packet);
-
-	}
-	RoundRobinPacketQueue::QueuedPacket::QueuedPacket(int priority, 
-		webrtc::Timestamp enqueue_time, uint64_t enqueue_order, 
-		std::unique_ptr<RtpPacketToSend> packet):
-		priority_(priority),
-		enqueue_time_(enqueue_time),
-		enqueue_order_(enqueue_order),
-		owned_packet_(packet.release())
-	{
-	}
-	RoundRobinPacketQueue::QueuedPacket::~QueuedPacket()
-	{
-	}
-	RoundRobinPacketQueue::Stream::Stream():
-		size(webrtc::DataSize::Zero()),
-		ssrc(0)
-	{
-	}
-	RoundRobinPacketQueue::Stream::~Stream()
-	{
-	}
+RoundRobinPacketQueue::QueuedPacket::QueuedPacket(int priority, 
+    webrtc::Timestamp enqueue_time, 
+    uint64_t enqueue_order, 
+    std::unique_ptr<RtpPacketToSend> packet) :
+    priority_(priority),
+    enqueue_time_(enqueue_time),
+    enqueue_order_(enqueue_order),
+    owned_packet_(packet.release())
+{
 }
+
+RoundRobinPacketQueue::QueuedPacket::~QueuedPacket() {
+}
+
+RoundRobinPacketQueue::Stream::Stream() :
+    size(webrtc::DataSize::Zero()),
+    ssrc(0)
+{
+}
+
+RoundRobinPacketQueue::Stream::~Stream() {
+}
+
+RoundRobinPacketQueue::RoundRobinPacketQueue() {
+}
+
+RoundRobinPacketQueue::~RoundRobinPacketQueue() {
+}
+
+void RoundRobinPacketQueue::Push(int priority, 
+    webrtc::Timestamp enqueue_time, 
+    uint64_t enqueue_order, 
+    std::unique_ptr<RtpPacketToSend> packet) 
+{
+    Push(QueuedPacket(priority, enqueue_time, enqueue_order,
+        std::move(packet)));
+}
+
+void RoundRobinPacketQueue::Push(const QueuedPacket& packet) {
+    // æŸ¥æ‰¾packetæ˜¯å¦å­˜åœ¨å¯¹åº”çš„stream
+    auto stream_iter = streams_.find(packet.Ssrc());
+    if (stream_iter == streams_.end()) { // Streamç¬¬ä¸€ä¸ªæ•°æ®åŒ…
+        stream_iter = streams_.emplace(packet.Ssrc(), Stream()).first;
+        // æ–°çš„æ•°æ®å°šæœªåˆ—å…¥ä¼˜å…ˆçº§æŽ’åº
+        stream_iter->second.priority_it = stream_priorities_.end();
+        stream_iter->second.ssrc = packet.Ssrc();
+    }
+
+    Stream* stream = &stream_iter->second;
+    // è°ƒæ•´æµçš„ä¼˜å…ˆçº§
+    if (stream->priority_it == stream_priorities_.end()) {
+        // åœ¨mapå½“ä¸­è¿˜æ²¡æœ‰è¿›è¡Œè¯¥æµçš„ä¼˜å…ˆçº§æŽ’åº
+        stream_priorities_.emplace(StreamPrioKey(packet.Priority(), stream->size),
+            packet.Ssrc());
+    }
+    else if (packet.Priority() < stream->priority_it->first.priority) {
+        stream_priorities_.erase(stream->priority_it);
+        // é‡æ–°æ’å…¥ï¼Œæ›´æ–°ä¼˜å…ˆçº§
+        stream_priorities_.emplace(StreamPrioKey(packet.Priority(), stream->size),
+            packet.Ssrc());
+    }
+
+    stream->packet_queue.emplace(packet);
+}
+
+} // namespace xrtc
