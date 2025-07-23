@@ -30,7 +30,9 @@ int GetPriorityForType(RtpPacketMediaType type) {
 PacingController::PacingController(webrtc::Clock* clock) :
     clock_(clock),
     last_process_time_(clock_->CurrentTime()),
-    min_packet_limit_(kDefaultMinPacketLimit)
+    min_packet_limit_(kDefaultMinPacketLimit),
+    media_budget_(0),
+    pacing_bitrate_(webrtc::DataRate::Zero())
 {
 }
 

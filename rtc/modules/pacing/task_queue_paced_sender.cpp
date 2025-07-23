@@ -31,7 +31,7 @@ void TaskQueuePacedSender::EnqueuePacket(std::unique_ptr<RtpPacketToSend> packet
 void TaskQueuePacedSender::MaybeProcessPackets(
     webrtc::Timestamp scheduled_process_time) 
 {
-    webrtc::Timestamp next_process_time = pacing_controller_.NextSendTime();
+    webrtc::Timestamp next_process_time = pacing_controller_.NextSendTime();// +5ms
     bool is_sheculded_call = (scheduled_process_time == next_process_time_);
     if (is_sheculded_call) {
         // 当前的任务将被执行，需要重新设定下一次任务执行的时间
