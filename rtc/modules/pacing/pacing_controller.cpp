@@ -7,7 +7,8 @@ namespace xrtc {
 namespace {
 
 const webrtc::TimeDelta kDefaultMinPacketLimit = webrtc::TimeDelta::Millis(5);
-
+const webrtc::TimeDelta kMaxElapsedTime = webrtc::TimeDelta::Seconds(2);//流逝时间
+const webrtc::TimeDelta kMaxProcessingInterval = webrtc::TimeDelta::Millis(30);//设置一个最大的处理间隔时间限制
 // 值越小，优先级越高
 const int kFirstPriority = 0;
 
@@ -51,6 +52,21 @@ void PacingController::ProcessPackets() {
     last_process_time_ = now;
 
     RTC_LOG(LS_WARNING) << "========ProcessPackets()";
+
+    //计算流逝的时间(当前时间距离上一次发送过去了多长时间）
+    webrtc::TimeDelta elapsed_time = UpdateTimeGetElapsed(now);
+
+    if (elapsed_time > webrtc::TimeDelta::Zero())
+    {
+        //更新预算
+        media_budget_.set_target_bitrate_bps(pacing_bitrate_.kbps());
+        UpdateBudgetWithElapsedTime(elapsed_time);
+    }
+
+
+
+
+
 }
 
 webrtc::Timestamp PacingController::NextSendTime() {
@@ -62,6 +78,33 @@ void PacingController::EnqueuePacketInternal(int priority,
 {
     webrtc::Timestamp now = clock_->CurrentTime();
     packet_queue_.Push(priority, now, packet_counter_++, std::move(packet));
+}
+
+void PacingController::UpdateBudgetWithElapsedTime(webrtc::TimeDelta elapsed_time)
+{
+    webrtc::TimeDelta delta = std::min(elapsed_time, kMaxProcessingInterval);
+    media_budget_.IncreaseBudget(delta.ms());
+}
+
+webrtc::TimeDelta PacingController::UpdateTimeGetElapsed(webrtc::Timestamp now)
+{
+    if (now < last_process_time_)
+    {
+        return webrtc::TimeDelta::Zero();
+    }
+
+    webrtc::TimeDelta elapsed_time = now - last_process_time_;
+
+    last_process_time_ = now;
+
+    if (elapsed_time > kMaxElapsedTime)
+    {
+        elapsed_time = kMaxElapsedTime;
+        RTC_LOG(LS_WARNING) << "elapsed_time " << elapsed_time.ms()
+            << " is longer than the kMaxElapsedTime, limitting to " << kMaxElapsedTime.ms();
+    }
+    return elapsed_time;
+
 }
 
 } // namespace xrtc

@@ -21,6 +21,8 @@ public:
 private:
     void EnqueuePacketInternal(int priority,
         std::unique_ptr<RtpPacketToSend> packet);
+    void UpdateBudgetWithElapsedTime(webrtc::TimeDelta elapsed_time);
+    webrtc::TimeDelta UpdateTimeGetElapsed(webrtc::Timestamp now);
 
 private:
     webrtc::Clock* clock_;
