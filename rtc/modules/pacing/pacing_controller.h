@@ -3,7 +3,7 @@
 
 #include <system_wrappers/include/clock.h>
 #include <api/units/data_rate.h>
-
+#include <memory>
 #include "xrtc/rtc/modules/rtp_rtcp/rtp_packet_to_send.h"
 #include "xrtc/rtc/modules/pacing/round_robin_packet_queue.h"
 #include "xrtc/rtc/modules/pacing/interval_budget.h"
@@ -23,7 +23,7 @@ private:
         std::unique_ptr<RtpPacketToSend> packet);
     void UpdateBudgetWithElapsedTime(webrtc::TimeDelta elapsed_time);
     webrtc::TimeDelta UpdateTimeGetElapsed(webrtc::Timestamp now);
-
+    unique_ptr <RtpPacketToSend> GetPendingPacket();
 private:
     webrtc::Clock* clock_;
     RoundRobinPacketQueue packet_queue_;

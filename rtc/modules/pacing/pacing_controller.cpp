@@ -63,6 +63,12 @@ void PacingController::ProcessPackets() {
         UpdateBudgetWithElapsedTime(elapsed_time);
     }
 
+    while (true)
+    {
+        //从队列中获取rtp数据进行发送
+        std::unique_ptr<RtpPacketToSend>rtp_packet = GetPendingPacket();
+    }
+
 
 
 
@@ -105,6 +111,16 @@ webrtc::TimeDelta PacingController::UpdateTimeGetElapsed(webrtc::Timestamp now)
     }
     return elapsed_time;
 
+}
+
+std::unique_ptr<RtpPacketToSend> PacingController::GetPendingPacket()
+{
+    //如果队列为空
+    if (packet_queue_.Empty())
+    {
+
+    }
+   
 }
 
 } // namespace xrtc
