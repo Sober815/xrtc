@@ -1,7 +1,7 @@
 ﻿#include "xrtc/rtc/pc/peer_connection.h"
 
 #include <vector>
-
+#include <memory>
 #include <rtc_base/logging.h>
 #include <rtc_base/string_encode.h>
 #include <rtc_base/helpers.h>
@@ -341,7 +341,9 @@ bool PeerConnection::SendEncodedAudio(std::shared_ptr<MediaFrame> frame) {
     // TODO, transport_name此处写死，后面可以换成变量
     transport_controller_->SendPacket("audio", (const char*)packet->data(),
         packet->size());
-
+    std::unique_ptr<RtpPacketToSend> packet =
+        std::make_unique<RtpPacketToSend>(*single_packet);
+    transport_send_->EnqueuePacket(std::move(packet));
     return true;
 }
 

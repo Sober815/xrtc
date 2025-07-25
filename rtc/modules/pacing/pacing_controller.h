@@ -23,7 +23,7 @@ private:
         std::unique_ptr<RtpPacketToSend> packet);
     void UpdateBudgetWithElapsedTime(webrtc::TimeDelta elapsed_time);
     webrtc::TimeDelta UpdateTimeGetElapsed(webrtc::Timestamp now);
-    unique_ptr <RtpPacketToSend> GetPendingPacket();
+    std::unique_ptr<RtpPacketToSend> GetPendingPacket();
 private:
     webrtc::Clock* clock_;
     RoundRobinPacketQueue packet_queue_;

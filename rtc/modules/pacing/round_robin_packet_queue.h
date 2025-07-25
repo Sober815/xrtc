@@ -4,6 +4,8 @@
 #include <queue>
 #include <map>
 #include <unordered_map>
+#include <cstdint>
+#include <memory>
 
 #include <api/units/timestamp.h>
 #include <api/units/data_size.h>
@@ -21,7 +23,11 @@ public:
         webrtc::Timestamp enqueue_time,
         uint64_t enqueue_order,
         std::unique_ptr<RtpPacketToSend> packet);
+    std::unique_ptr <RtpPacketToSend> Pop();
 
+    
+
+    bool Empty() const;
 private:
     struct QueuedPacket {
     public:
@@ -42,6 +48,7 @@ private:
 
         int Priority() const { return priority_; }
         uint32_t Ssrc() const { return owned_packet_->ssrc(); }
+        RtpPacketToSend* rtp_packet()const { return owned_packet_; }
 
     private:
         int priority_; // RTP包的优先级
@@ -78,8 +85,12 @@ private:
 
 private:
     void Push(const QueuedPacket& packet);
-
+    RoundRobinPacketQueue::Stream* GetHighestPriorityStream();
+    webrtc::DataSize PacketSize(const QueuedPacket& packet);
 private:
+    size_t size_packets_ = 0;
+    webrtc::DataSize max_size_;
+
     std::unordered_map<uint32_t, Stream> streams_;
     // 按照StreamPrioKey从小到到进行排序
     std::multimap<StreamPrioKey, uint32_t> stream_priorities_;

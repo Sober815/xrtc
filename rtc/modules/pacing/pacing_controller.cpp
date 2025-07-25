@@ -60,6 +60,7 @@ void PacingController::ProcessPackets() {
     {
         //更新预算
         media_budget_.set_target_bitrate_bps(pacing_bitrate_.kbps());
+
         UpdateBudgetWithElapsedTime(elapsed_time);
     }
 
@@ -68,9 +69,6 @@ void PacingController::ProcessPackets() {
         //从队列中获取rtp数据进行发送
         std::unique_ptr<RtpPacketToSend>rtp_packet = GetPendingPacket();
     }
-
-
-
 
 
 }
@@ -118,9 +116,17 @@ std::unique_ptr<RtpPacketToSend> PacingController::GetPendingPacket()
     //如果队列为空
     if (packet_queue_.Empty())
     {
-
+        return nullptr;
     }
-   
+   //如果本轮预算已经耗尽
+    if (media_budget_.bytes_remaining())
+    {
+        return nullptr;
+    }
+
+    return packet_queue_.Pop();
+    
+    
 }
 
 } // namespace xrtc
